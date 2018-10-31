@@ -20,4 +20,9 @@ setuptools.setup(
         "Operating System :: OS Independent",
         "Development Status :: 4 - Beta",
     ],
+    install_requires=[
+        'boto3',
+        'iso8601',
+        'bcrypt',
+    ],
 )
