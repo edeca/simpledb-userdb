@@ -9,10 +9,7 @@ import iso8601
 
 @unique
 class AuthenticationResult(Enum):
-    """
-    Enumeration to hold the result of authentication, including
-    success, errors and a special case internal error.
-    """
+    """Enumeration to hold the result of authentication."""
 
     Success = 0
     NoSuchUser = 1
@@ -28,8 +25,16 @@ class UserDatabase:
     _domain = None
 
     def connect(self, region, domain, auto_create=True):
-        """
-        Create a SimpleDB client using boto3 for later use.
+        """Create a SimpleDB client using boto3 for later use.
+
+        Args:
+            region (str): AWS region name to use.
+            domain (str): Name of the domain (database), must be unique across account.
+            auto_create (bool): Creates missing domain (database) if True.
+
+        Returns:
+            bool: The return value. True for success, False otherwise.
+
         """
         self._sdb = boto3.client("sdb", region_name=region)
 
@@ -51,6 +56,16 @@ class UserDatabase:
 
     @staticmethod
     def _attribute(name, value, replace=True):
+        """Convenience function to create dictionary 
+
+        Args:
+            name (str): The attribute name, for example `last_login`.
+            value (str): The attribute value, for example `2018-10-31T00:00:00`.
+            replace (bool): If True, replace existing params with the same name. If False, add to them (like a list of tags).
+
+        Returns:
+            dict: The return value. True for success, False otherwise.
+        """
         return {"Name": name, "Value": value, "Replace": replace}
 
     @staticmethod
