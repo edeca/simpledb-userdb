@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from enum import Enum, unique
 from datetime import datetime
 from datetime import timedelta
@@ -9,14 +10,34 @@ import iso8601
 
 @unique
 class AuthenticationResult(Enum):
-    """Enumeration to hold the result of authentication."""
+    """Enumeration to hold the result of authentication.
+
+    Errors are currently numbered in the order they would appear in code,
+    for example disabled is checked before expiry, however that cannot be
+    guaranteed in future if new features are added.
+
+    See Also:
+        An example using this code is provided at
+        :meth:`UserDatabase.authenticate`
+    """
 
     Success = 0
+    """Authentication succeeded"""
+
     NoSuchUser = 1
+    """The user does not exist in the SimpleDB backend"""
+
     AccountDisabled = 2
+    """The ``disabled`` flag is set for this account"""
+
     AccountExpired = 3
+    """The current date & time is after the set expiry"""
+
     WrongPassword = 4
+    """The wrong password was provided"""
+
     InternalError = 99
+    """An error occurred, for example an exception was caught"""
 
 
 class UserDatabase:
@@ -27,14 +48,16 @@ class UserDatabase:
     def connect(self, region, domain, auto_create=True):
         """Create a SimpleDB client using boto3 for later use.
 
+        Note:
+            SimpleDB calls a "database" a "domain".
+
         Args:
             region (str): AWS region name to use.
-            domain (str): Name of the domain (database), must be unique across account.
-            auto_create (bool): Creates missing domain (database) if True.
+            domain (str): Name of the database, must be unique across account.
+            auto_create (bool): Creates missing database if ``True``.
 
         Returns:
-            bool: The return value. True for success, False otherwise.
-
+            bool: ``True`` for success, ``False`` otherwise.
         """
         self._sdb = boto3.client("sdb", region_name=region)
 
@@ -56,11 +79,11 @@ class UserDatabase:
 
     @staticmethod
     def _attribute(name, value, replace=True):
-        """Convenience function to create dictionary 
+        """Convenience function to create dictionary.
 
         Args:
             name (str): The attribute name, for example `last_login`.
-            value (str): The attribute value, for example `2018-10-31T00:00:00`.
+            value (str): Data, for example `2018-10-31T00:00:00`.
             replace (bool): If True, replace existing params with the same name. If False, add to them (like a list of tags).
 
         Returns:
@@ -70,10 +93,11 @@ class UserDatabase:
 
     @staticmethod
     def _attrs_to_dict(attrs, multiple=None):
-        """
-        Converts the SimpleDB response format to a Python dict.  Some values
-        may be "multi valued", for example a list of tags.  These will be
-        converted to a list if provided in the multiple argument.
+        """Converts the SimpleDB response format to a Python dict.
+
+        Some values may be "multi valued", for example a list of tags.
+        These will be converted to a list if provided in the multiple
+        argument.
         """
         out = {}
 
@@ -99,8 +123,8 @@ class UserDatabase:
         return out
 
     def _create_db(self, domain):
-        """
-        """
+        """"""
+
         if not self._sdb:
             return False
 
@@ -109,9 +133,7 @@ class UserDatabase:
         return True
 
     def delete_db(self):
-        """
-
-        """
+        """"""
         if not self._sdb:
             return False
 
@@ -139,11 +161,11 @@ class UserDatabase:
         self._update_user(username, password, enabled, expiry)
 
     def _update_user(self, username, password=None, enabled=None, expiry=None):
-        """
-        Update attributes for a user.  password should be provided as a
-        a Unicode string.  enabled should be True or False.  expiry
-        is the number of days (from now) after which the account will
-        no longer be active.
+        """Update attributes for a user.
+
+        password should be provided as a a Unicode string.  enabled
+        should be True or False.  expiry is the number of days (from
+        now) after which the account will no longer be active.
         """
 
         attrs = []
@@ -181,10 +203,10 @@ class UserDatabase:
         )
 
     def update_extra_data(self, username, data):
-        """
-        Convenience function to update extra data for a user.  Data should
-        be provided as a dict, which will be serialised to JSON and stored
-        in the backend.  If the dictionary cannot be serialised then an
+        """Convenience function to update extra data for a user.  Data should
+        be provided as a dict, which will be serialised to JSON and stored in
+        the backend.  If the dictionary cannot be serialised then an.
+
         exception will be raised - it is necessary to convert native objects
         like datetime into text.
 
@@ -205,8 +227,7 @@ class UserDatabase:
         )
 
     def _update_last_login(self, username, timestamp=None):
-        """
-        """
+        """"""
 
         attrs = []
 
@@ -223,8 +244,7 @@ class UserDatabase:
         )
 
     def add_user_role(self, username, role):
-        """
-        """
+        """"""
         if not self.get_user(username):
             raise ValueError("Username does not exist")
 
@@ -249,9 +269,7 @@ class UserDatabase:
         return False
 
     def get_user(self, username):
-        """
-        Retrieve a user object from the database and return it, or None.
-        """
+        """Retrieve a user object from the database and return it, or None."""
         qry = 'select * from {} where itemName() = "{}"'.format(self._domain, username)
 
         response = self._sdb.select(SelectExpression=qry, ConsistentRead=True)
@@ -272,12 +290,57 @@ class UserDatabase:
             return None
 
     def authenticate(self, username, password):
-        """
-        Check a given username and password pair to determine whether access
-        should be granted.
+        """Test a given username and password.
 
-        Returns the result of authentication, which will be the first failure,
-        internal error, or success.
+        Returns the result of authentication, which will be the first
+        failure, internal error, or success.  Status is represented by the
+        enum :class:`AuthenticationResult`.
+
+        The underlying authentication mechanism is designed to be resistant
+        to timing attacks, therefore it should be difficult to enumerate
+        valid usernames.  This means the password will always be checked,
+        even for invalid users.  However, the first error encountered is
+        the one which will be returned.
+
+        Example:
+            Very simple usage, relies on ``AuthenticationResult.Success`` being
+            ``0``::
+
+                # .. setup UserDatabase first ..
+
+                if db.authenticate("jane", "p4ssw0rd") == 0:
+                    # All good
+                    pass
+                else:
+                    # Some form of error
+                    pass
+
+            Standard usage::
+
+                from simpledb_userdb import UserDatabase, AuthenticationResult
+
+                # .. setup UserDatabase first ..
+
+                result = db.authenticate("bob", "w34kp4ss")
+
+                print(result)  # Result can be stringified
+
+                if result == AuthenticationResult.Success:
+                    # All good
+                    pass
+                elif result == AuthenticationResult.InternalError:
+                    # Uh oh, how did this happen?
+                    pass
+                else:
+                    # Authentication failed
+                    pass
+
+        Args:
+            username (str): the username to check
+            password (str): the password to check
+
+        Returns:
+            AuthenticationResult: success, failure, or internal error
         """
 
         try:
@@ -292,9 +355,10 @@ class UserDatabase:
             return AuthenticationResult.InternalError
 
     def _authenticate(self, username, password):
-        """
-        Internal authentication function, which should be resistant to timing
-        attacks.  Any exceptions will be caught by the public function.
+        """Internal authentication function, which should be resistant to
+        timing attacks.
+
+        Any exceptions will be caught by the public function.
         """
 
         errors = []
